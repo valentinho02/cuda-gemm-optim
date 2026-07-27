@@ -44,7 +44,7 @@ Single-precision GEMM(`C = A x B`, FP32)을 4단계로 최적화하며, 각 단�
 | 커널 | GFLOPS | cuBLAS 대비 (%) | naive 대비 speedup |
 |---|---|---|---|
 | Naive | 563.73 | 18.38% | 1.0x |
-| Shared Memory Tiling | <!-- 숫자 --> | <!-- % --> | <!-- x --> |
+| Shared Memory Tiling | 823.52 | <!-- % --> | <!-- x --> |
 | Register Blocking | <!-- 숫자 --> | <!-- % --> | <!-- x --> |
 | cuBLAS | 3066.99 | 100% | 5.44x |
 
