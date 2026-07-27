@@ -3,7 +3,7 @@
 **CUDA GEMM 커널을 naive부터 cuBLAS 근접 성능까지 단계적으로 최적화한 프로젝트.**
 매 단계마다 "왜 빨라지는가"를 memory access 횟수, occupancy, throughput 관점에서 정량적으로 검증한다.
 
-> GPU 최적화 + ML 인프라 엔지니어 로드맵 Phase 1 (2026.07) 산출물
+> (2026.07) 산출물
 
 ---
 

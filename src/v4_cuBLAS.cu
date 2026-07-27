@@ -28,6 +28,11 @@ int main(){
     cudaMemcpy(dB, hB, size, cudaMemcpyHostToDevice);
     cudaMemset(dC, 0, size);
 
+    for (int i = 0; i < N * N; i++) {
+        hA[i] = 1.0f;
+        hB[i] = 1.0f;
+    }
+
     //warmup
     cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, N, N, N, &alpha, dB, N, dA, N, &beta, dC, N);
     cudaDeviceSynchronize();
