@@ -43,10 +43,10 @@ Single-precision GEMM(`C = A x B`, FP32)을 4단계로 최적화하며, 각 단�
 
 | 커널 | GFLOPS | cuBLAS 대비 (%) | naive 대비 speedup |
 |---|---|---|---|
-| Naive | <!-- 숫자 --> | <!-- % --> | 1.0x |
+| Naive | 563.73 | 18.38% | 1.0x |
 | Shared Memory Tiling | <!-- 숫자 --> | <!-- % --> | <!-- x --> |
 | Register Blocking | <!-- 숫자 --> | <!-- % --> | <!-- x --> |
-| cuBLAS | <!-- 숫자 --> | 100% | <!-- x --> |
+| cuBLAS | 3066.99 | 100% | 5.44x |
 
 ![speedup comparison](docs/images/speedup_vs_cublas.png)
 
@@ -57,7 +57,7 @@ Single-precision GEMM(`C = A x B`, FP32)을 4단계로 최적화하며, 각 단�
 | 128 | | | | |
 | 512 | | | | |
 | 1024 | | | | |
-| 2048 | | | | |
+| 2048 | 563.73 | | | 3066.99 |
 | 4096 | | | | |
 
 ![multi size scaling](docs/images/multi_size_scaling.png)
@@ -109,7 +109,7 @@ cd pytorch_extension && pip install -e .
 
 - **Naive → Tiling**: memory-bound 커널에서 global memory 재접근 횟수를 줄이는 것이 성능에 가장 직접적인 영향을 준다. 원소당 K회 접근하던 것을 K/TILE_SIZE회로 줄이면서 <!-- 배수 --> 개선을 확인했다.
 - **Tiling → Register Blocking**: shared memory bandwidth 자체가 다음 병목이 되고, 스레드당 여러 출력을 계산해 ILP를 높이고 `float4` 벡터화로 메모리 대역폭을 더 끌어올릴 수 있었다.
-- **cuBLAS와의 격차**: 여전히 남아있는 <!-- % --> 격차는 warp-level scheduling, register spilling 최적화, double buffering 등 더 세밀한 튜닝 영역이며 Phase 2(Triton, warp shuffle)에서 이어서 다룬다.
+- **cuBLAS와의 격차**: 여전히 남아있는 81.62% 격차는 warp-level scheduling, register spilling 최적화, double buffering 등 더 세밀한 튜닝 영역이며 Phase 2(Triton, warp shuffle)에서 이어서 다룬다.
 
 ## 다음 목표
 

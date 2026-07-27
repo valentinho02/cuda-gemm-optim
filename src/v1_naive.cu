@@ -79,6 +79,9 @@ int main(){
     dim3 gridSize((N + blockSize.x - 1)/ blockSize.x, (N + blockSize.y - 1) / blockSize.y);
 
     run_benchmark(sgemm_naive, gridSize, blockSize, dA, dB, dC, N, "1. Sgemm naive ");
+    
+    cudaFree(dA); cudaFree(dB); cudaFree(dC);
+    free(hA); free(hB);
 }
 
 /*
