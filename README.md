@@ -12,6 +12,7 @@
 - [프로젝트 개요](#프로젝트-개요)
 - [최적화 여정](#최적화-여정)
 - [벤치마크 결과](#벤치마크-결과)
+- [메모리 접근 패턴 실험](#메모리-접근-패턴-실험)
 - [프로젝트 구조](#프로젝트-구조)
 - [빌드 및 실행](#빌드-및-실행)
 - [배운 것](#배운-것)
@@ -34,8 +35,8 @@ Single-precision GEMM(`C = A x B`, FP32)을 4단계로 최적화하며, 각 단�
 |---|---|---|---|
 | 1 | Naive | 스레드당 출력 원소 1개, global memory 직접 접근 | [`src/v1_naive.cu`](src/v1_naive.cu) |
 | 2 | Shared Memory Tiling | 타일 단위로 shared memory에 캐싱, global read 횟수 K/TILE_SIZE로 감소 | [`src/v2_tiling.cu`](src/v2_tiling.cu) |
-| 3 | Register Blocking | 스레드 1개가 여러 출력 원소 계산 + `float4` 벡터화 로드로 대역폭 극대화 | [`src/v3_register_blocking.cu`](src/v3_register_blocking.cu) |
-| 4 | cuBLAS | 비교 기준선 (`cublasSgemm`) | [`src/v4_cublas_baseline.cu`](src/v4_cublas_baseline.cu) |
+| 3 | Register Blocking | 스레드 1개가 여러 출력 원소 계산 + `float4` 벡터화 로드로 대역폭 극대화 | [`src/v3_registerBlocking.cu`](src/v3_registerBlocking.cu) |
+| 4 | cuBLAS | 비교 기준선 (`cublasSgemm`) | [`src/v4_cuBLAS.cu`](src/v4_cuBLAS.cu) |
 
 ## 벤치마크 결과
 
@@ -48,8 +49,6 @@ Single-precision GEMM(`C = A x B`, FP32)을 4단계로 최적화하며, 각 단�
 | Register Blocking | 1457.22 | 47.51% | 2.58x |
 | cuBLAS | 3066.99 | 100% | 5.44x |
 
-![speedup comparison](docs/images/speedup_vs_cublas.png)
-
 ### 행렬 크기별 스케일링
 
 | 크기 | Naive (GFLOPS) | Tiling (GFLOPS) | Register Blocking (GFLOPS) | cuBLAS (GFLOPS) |
@@ -60,9 +59,18 @@ Single-precision GEMM(`C = A x B`, FP32)을 4단계로 최적화하며, 각 단�
 | 2048 | 563.73 | 823.52 | 1457.22 | 3066.99 |
 | 4096 | | | | |
 
-![multi size scaling](docs/images/multi_size_scaling.png)
+## 메모리 접근 패턴 실험
 
-> 원본 CSV: [`benchmarks/results/`](benchmarks/results/)
+Global memory access pattern이 성능에 미치는 영향을 확인하기 위해 `4096 x 4096` 행렬에서 coalesced access와 uncoalesced access를 비교했다.
+
+| 접근 패턴 | 실행 시간 |
+|---|---:|
+| Coalesced Access | 0.63643 ms |
+| Uncoalesced Access | 2.0925 ms |
+
+Uncoalesced access가 coalesced access보다 약 3.29x 느렸다. 같은 연산량이어도 warp 내 스레드가 연속된 주소를 접근하는지 여부만으로 global memory throughput이 크게 달라진다는 것을 확인했다.
+
+실험 코드: [`src/memory_coalescing.cu`](src/memory_coalescing.cu)
 
 ## 프로젝트 구조
 
@@ -71,49 +79,35 @@ cuda-gemm-optim/
 ├── src/
 │   ├── v1_naive.cu
 │   ├── v2_tiling.cu
-│   ├── v3_register_blocking.cu
-│   ├── v4_cublas_baseline.cu
-│   └── common/
-│       ├── gemm_utils.cuh
-│       └── benchmark_utils.cuh
-├── benchmarks/
-│   ├── run_all_benchmarks.sh
-│   └── results/
-├── pytorch_extension/          # pybind11 기반 PyTorch custom op
-│   ├── setup.py
-│   ├── gemm_binding.cpp
-│   ├── gemm_kernel.cu
-│   └── test_extension.py
-├── fused_kernel/                # LayerNorm+GELU fused kernel
-│   ├── layernorm_gelu_fused.cu
-│   ├── layernorm_gelu_baseline.py
-│   └── benchmark_fused.py
-└── docs/
-    └── images/
+│   ├── v3_registerBlocking.cu
+│   ├── v4_cuBLAS.cu
+│   └── memory_coalescing.cu
+└── pytorch-extension/
 ```
 
 ## 빌드 및 실행
 
 ```bash
 # 개별 커널 컴파일 예시
-nvcc -O3 -arch=sm_75 src/v3_register_blocking.cu -o v3_bench
+nvcc -O3 -arch=sm_75 src/v3_registerBlocking.cu -o v3_bench
 
-# 전체 벤치마크 실행
-bash benchmarks/run_all_benchmarks.sh
+# memory coalescing 실험
+nvcc -O3 -arch=sm_75 src/memory_coalescing.cu -o memory_coalescing
 
 # PyTorch extension 빌드
-cd pytorch_extension && pip install -e .
+cd pytorch-extension && pip install -e .
 ```
 
 ## 배운 것
 
 - **Naive → Tiling**: memory-bound 커널에서 global memory 재접근 횟수를 줄이는 것이 성능에 가장 직접적인 영향을 준다. 원소당 K회 접근하던 것을 K/TILE_SIZE회로 줄이면서 1.46x 개선을 확인했다.
 - **Tiling → Register Blocking**: shared memory bandwidth 자체가 다음 병목이 되고, 스레드당 여러 출력을 계산해 ILP를 높이고 `float4` 벡터화로 메모리 대역폭을 더 끌어올리면서 1.77x 추가 개선을 확인했다.
+- **Memory Coalescing**: `4096 x 4096` 메모리 접근 실험에서 coalesced access가 uncoalesced access보다 약 3.29x 빨랐다. GEMM에서도 warp 단위의 연속 주소 접근을 유지하는 것이 global memory 성능의 핵심임을 확인했다.
 - **cuBLAS와의 격차**: 여전히 남아있는 52.49% 격차는 warp-level scheduling, register spilling 최적화, double buffering 등 더 세밀한 튜닝 영역이며 Phase 2(Triton, warp shuffle)에서 이어서 다룬다.
 
 ## 다음 목표
 
-- [ ] `pytorch_extension/`: pybind11로 `torch.Tensor` 인터페이스 노출, `torch.matmul` 대비 벤치마크
+- [ ] `pytorch-extension/`: pybind11로 `torch.Tensor` 인터페이스 노출, `torch.matmul` 대비 벤치마크
 - [ ] `fused_kernel/`: LayerNorm+GELU fused kernel, 순정 PyTorch 대비 forward/backward speedup 측정
 - [ ] Triton 버전과의 비교는 별도 레포 [`triton-attention-study`](https://github.com/) 에서 진행
 
@@ -122,5 +116,6 @@ cd pytorch_extension && pip install -e .
 ## 관련 글 (Velog)
 
 - [코얼레싱했을 때 vs 안 했을 때 성능 차이](https://velog.io/@valentinho/CUDA-%EB%A9%94%EB%AA%A8%EB%A6%AC-coalescing)
-- [gemm 최적화](https://velog.io/@valentinho/GEMM%EC%97%90-%EB%8C%80%ED%95%B4%EC%84%9C-%EC%95%8C%EC%95%84%EB%B3%B4%EC%9E%902)
+- [gemm 최적화를 해보자](https://velog.io/@valentinho/GEMM%EC%97%90-%EB%8C%80%ED%95%B4%EC%84%9C-%EC%95%8C%EC%95%84%EB%B3%B4%EC%9E%902)
 - <!-- Week8: PyTorch Custom CUDA Extension으로 Fused Kernel 만들기 -->
+- [fused kernel이 필요한 이유](https://velog.io/@valentinho/Cudapytorch-Fused-Kernel)
