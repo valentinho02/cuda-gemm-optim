@@ -92,3 +92,14 @@ int main(){
 
     return 0;
 }
+
+/*
+copied result:
+Coalescing vs Uncoalescing testing
+Width: 4096 Height : 4096
+
+[결과 비교]
+1. Coalesced Access Time   : 0.63643 ms
+2. Uncoalesced Access Time : 2.0925 ms
+-> 속도 차이: 약 3.28787배 차이!
+*/
