@@ -122,5 +122,5 @@ cd pytorch_extension && pip install -e .
 ## 관련 글 (Velog)
 
 - <!-- https://velog.io/@valentinho/CUDA-%EB%A9%94%EB%AA%A8%EB%A6%AC-coalescing -->
-- <!-- -->
+- <!-- https://velog.io/@valentinho/GEMM%EC%97%90-%EB%8C%80%ED%95%B4%EC%84%9C-%EC%95%8C%EC%95%84%EB%B3%B4%EC%9E%902 -->
 - <!-- Week8: PyTorch Custom CUDA Extension으로 Fused Kernel 만들기 -->
