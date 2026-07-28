@@ -23,8 +23,8 @@
 
 Single-precision GEMM(`C = A x B`, FP32)을 4단계로 최적화하며, 각 단계에서 GPU 아키텍처 지식(memory coalescing, shared memory, occupancy, ILP)이 실제 성능에 어떻게 반영되는지 직접 측정했다.
 
-- **GPU**: <!-- 예: NVIDIA T4 (Colab) --> 
-- **CUDA Toolkit**: <!-- 버전 -->
+- **GPU**: NVIDIA T4 (Colab)
+- **CUDA Toolkit**: 13.0
 - **행렬 크기**: 128 / 512 / 1024 / 2048 / 4096 (정방 행렬)
 - **정확도 검증**: 모든 커널은 cuBLAS 결과 대비 상대 오차 기준으로 correctness test 통과
 
@@ -121,6 +121,6 @@ cd pytorch_extension && pip install -e .
 
 ## 관련 글 (Velog)
 
-- <!-- https://velog.io/@valentinho/CUDA-%EB%A9%94%EB%AA%A8%EB%A6%AC-coalescing -->
-- <!-- https://velog.io/@valentinho/GEMM%EC%97%90-%EB%8C%80%ED%95%B4%EC%84%9C-%EC%95%8C%EC%95%84%EB%B3%B4%EC%9E%902 -->
+- [코얼레싱했을 때 vs 안 했을 때 성능 차이](https://velog.io/@valentinho/CUDA-%EB%A9%94%EB%AA%A8%EB%A6%AC-coalescing)
+- [gemm 최적화](https://velog.io/@valentinho/GEMM%EC%97%90-%EB%8C%80%ED%95%B4%EC%84%9C-%EC%95%8C%EC%95%84%EB%B3%B4%EC%9E%902)
 - <!-- Week8: PyTorch Custom CUDA Extension으로 Fused Kernel 만들기 -->
