@@ -121,6 +121,6 @@ cd pytorch_extension && pip install -e .
 
 ## 관련 글 (Velog)
 
-- <!-- Week1~2: 메모리 코얼레싱 글 링크 -->
-- <!-- Week6: GEMM naive→cuBLAS N% 최적화 과정 글 링크 -->
+- <!-- https://velog.io/@valentinho/CUDA-%EB%A9%94%EB%AA%A8%EB%A6%AC-coalescing -->
+- <!-- -->
 - <!-- Week8: PyTorch Custom CUDA Extension으로 Fused Kernel 만들기 -->
