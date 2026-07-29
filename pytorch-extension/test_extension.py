@@ -65,3 +65,22 @@ def run_benchmark():
 if __name__ == "__main__":
     test_gemm_correctness()
     run_benchmark()
+
+"""
+copied result:
+=== GEMM Forward Correctness Test ===
+128x128 @ 128x128: PASS (max diff: 0.000019)
+511x257 @ 257x333: PASS (max diff: 0.000000)
+512x512 @ 512x512: PASS (max diff: 0.000000)
+
+=== Running GEMM Benchmark ===
+<torch.utils.benchmark.utils.common.Measurement object at 0x7d6577672c90>
+GEMM Benchmark: PyTorch Native Matmul
+  Median: 4.19 ms
+  IQR:    0.04 ms (4.17 to 4.21)
+  5 measurements, 10 runs per measurement, 1 thread
+<torch.utils.benchmark.utils.common.Measurement object at 0x7d65772daf00>
+GEMM Benchmark: Custom CUDA GEMM (v3)
+  Median: 9.93 ms
+  3 measurements, 10 runs per measurement, 1 thread
+"""
