@@ -224,5 +224,5 @@ python benchmark.py
 - [코얼레싱했을 때 vs 안 했을 때 성능 차이](https://velog.io/@valentinho/CUDA-%EB%A9%94%EB%AA%A8%EB%A6%AC-coalescing)
 - [gemm 최적화를 해보자](https://velog.io/@valentinho/GEMM%EC%97%90-%EB%8C%80%ED%95%B4%EC%84%9C-%EC%95%8C%EC%95%84%EB%B3%B4%EC%9E%902)
 - [fused kernel이 필요한 이유](https://velog.io/@valentinho/Cudapytorch-Fused-Kernel)
-- [fused kernel layer + gelu] (https://velog.io/@valentinho/fused-kernel-%EB%A1%9C-layernormalize-gelu-%ED%95%A8%EC%88%98-%ED%95%A9%EC%B9%98%EA%B8%B0-1)
-- [mathematic logic for layer gelu backward] (https://velog.io/@valentinho/CUDA-LayerNorm-GELU-%EC%88%98%ED%95%99%EC%A0%81-%EB%85%BC%EB%A6%AC)
+- [fused kernel layer + gelu](https://velog.io/@valentinho/fused-kernel-%EB%A1%9C-layernormalize-gelu-%ED%95%A8%EC%88%98-%ED%95%A9%EC%B9%98%EA%B8%B0-1)
+- [mathematic logic for layer gelu backward](https://velog.io/@valentinho/CUDA-LayerNorm-GELU-%EC%88%98%ED%95%99%EC%A0%81-%EB%85%BC%EB%A6%AC)
