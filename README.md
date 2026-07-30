@@ -36,6 +36,33 @@ Single-precision GEMM(`C = A x B`)을 4단계로 최적화하며, 각 단계에�
 
 ---
 
+## 프로젝트 구조
+
+```
+ cuda-gemm-optim/
+├── src/
+│   ├── v1_naive.cu
+│   ├── v2_tiling.cu
+│   ├── v3_registerBlocking.cu
+│   ├── v4_cuBLAS.cu
+│   └── memory_coalescing.cu
+│
+├── pytorch-extension/
+│   ├── setup.py
+│   ├── test_extension.py
+│   ├── gemm_kernel.cu
+│   └── gemm_binding.cpp
+│
+├── fused-kernel/
+│   ├── fused_kernel.cu
+│   ├── binding.cpp
+│   ├── setup.py
+│   └── benchmark.py
+│
+└── README.md
+```
+---
+
 ## 최적화 여정
 
 | 단계 | 기법 | 핵심 아이디어 | 파일 |
@@ -113,26 +140,25 @@ Uncoalesced access가 coalesced access보다 약 3.29x 느렸다. 같은 연산�
 실험 코드: [`src/memory_coalescing.cu`](src/memory_coalescing.cu)
 
 ---
+## Fused LayerNorm + GELU Benchmark
 
-## 프로젝트 구조
+LayerNorm과 GELU를 하나의 CUDA kernel로 fusion하여 kernel launch overhead와 global memory round-trip을 줄였다. PyTorch Native(LayerNorm → GELU)와 동일한 연산 결과를 유지하면서 forward와 backward를 모두 측정하였다.
+| Shape (B, S, H) | Mode | Forward (ms) | Backward (ms) | Total (ms) | Speedup |
+|-----------------|------|-------------:|--------------:|-----------:|---------:|
+| (16, 512, 768) | Native | 0.4894 | 1.2150 | 1.7043 | 1.00x |
+|                 | **Fused** | **0.3128** | **0.8735** | **1.1863** | **1.44x** |
+| (8, 1024, 1024) | Native | 0.5819 | 1.6257 | 2.2076 | 1.00x |
+|                 | **Fused** | **0.2846** | **1.1360** | **1.4206** | **1.55x** |
+| (4, 2048, 2048) | Native | 1.3258 | 3.5245 | 4.8503 | 1.00x |
+|                 | **Fused** | **0.5553** | **2.3382** | **2.8935** | **1.68x** |
+| (2, 4096, 4096) | Native | 2.7805 | 7.0837 | 9.8642 | 1.00x |
+|                 | **Fused** | **1.3829** | **5.3870** | **6.7699** | **1.46x** |
 
-```
-cuda-gemm-optim/
-├── src/
-│   ├── v1_naive.cu
-│   ├── v2_tiling.cu
-│   ├── v3_registerBlocking.cu
-│   ├── v4_cuBLAS.cu
-│   └── memory_coalescing.cu
-├── pytorch-extension/
-│   ├── setup.py
-│   ├── test_extension.py
-│   ├── gemm_kernel.cu
-│   └── gemm_binding.cpp
-└── README.md
-```
+### 결과 요약
 
----
+- 평균적으로 **1.44~1.68x**의 end-to-end speedup을 달성하였다.
+- 연산량이 증가할수록 kernel fusion 효과가 더욱 크게 나타났으며, 최대 **1.68x**의 성능 향상을 확인하였다.
+- Forward뿐 아니라 Backward에서도 global memory 접근과 kernel launch 횟수를 줄여 전체 학습 시간을 단축하였다.
 
 ## 빌드 및 실행
 
