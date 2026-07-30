@@ -11,13 +11,14 @@
 ## 목차
 
 - [프로젝트 개요](#프로젝트-개요)
+- [프로젝트 구조](#프로젝트-구조)
 - [최적화 여정](#최적화-여정)
 - [벤치마크 결과](#벤치마크-결과)
   - [CUDA Native Benchmark (2048x2048)](#cuda-native-benchmark-2048x2048)
   - [PyTorch Custom Extension Benchmark (2048x2048)](#pytorch-custom-extension-benchmark-2048x2048)
   - [행렬 크기별 스케일링](#행렬-크기별-스케일링)
 - [메모리 접근 패턴 실험](#메모리-접근-패턴-실험)
-- [프로젝트 구조](#프로젝트-구조)
+- [Fused LayerNorm + GELU 벤치마크](#fused-layernorm--gelu-벤치마크)
 - [빌드 및 실행](#빌드-및-실행)
 - [배운 것](#배운-것)
 - [다음 목표](#다음-목표)
@@ -39,7 +40,7 @@ Single-precision GEMM(`C = A x B`)을 4단계로 최적화하며, 각 단계에�
 ## 프로젝트 구조
 
 ```
- cuda-gemm-optim/
+cuda-gemm-optim/
 ├── src/
 │   ├── v1_naive.cu
 │   ├── v2_tiling.cu
@@ -61,6 +62,7 @@ Single-precision GEMM(`C = A x B`)을 4단계로 최적화하며, 각 단계에�
 │
 └── README.md
 ```
+
 ---
 
 ## 최적화 여정
@@ -140,9 +142,11 @@ Uncoalesced access가 coalesced access보다 약 3.29x 느렸다. 같은 연산�
 실험 코드: [`src/memory_coalescing.cu`](src/memory_coalescing.cu)
 
 ---
-## Fused LayerNorm + GELU Benchmark
+
+## Fused LayerNorm + GELU 벤치마크
 
 LayerNorm과 GELU를 하나의 CUDA kernel로 fusion하여 kernel launch overhead와 global memory round-trip을 줄였다. PyTorch Native(LayerNorm → GELU)와 동일한 연산 결과를 유지하면서 forward와 backward를 모두 측정하였다.
+
 | Shape (B, S, H) | Mode | Forward (ms) | Backward (ms) | Total (ms) | Speedup |
 |-----------------|------|-------------:|--------------:|-----------:|---------:|
 | (16, 512, 768) | Native | 0.4894 | 1.2150 | 1.7043 | 1.00x |
@@ -159,6 +163,8 @@ LayerNorm과 GELU를 하나의 CUDA kernel로 fusion하여 kernel launch overhea
 - 평균적으로 **1.44~1.68x**의 end-to-end speedup을 달성하였다.
 - 연산량이 증가할수록 kernel fusion 효과가 더욱 크게 나타났으며, 최대 **1.68x**의 성능 향상을 확인하였다.
 - Forward뿐 아니라 Backward에서도 global memory 접근과 kernel launch 횟수를 줄여 전체 학습 시간을 단축하였다.
+
+---
 
 ## 빌드 및 실행
 
@@ -183,6 +189,15 @@ pip install -e .
 python test_extension.py
 ```
 
+### Fused LayerNorm + GELU 빌드 및 벤치마크 실행
+
+```bash
+cd fused-kernel
+pip install -e .
+
+python benchmark.py
+```
+
 ---
 
 ## 배운 것
@@ -191,6 +206,7 @@ python test_extension.py
 - **Tiling → Register Blocking**: shared memory bandwidth 자체가 다음 병목이 되고, 스레드당 여러 출력을 계산해 ILP를 높이고 `float4` 벡터화로 메모리 대역폭을 더 끌어올리면서 1.77x 추가 개선을 확인했다.
 - **Memory Coalescing**: `4096 x 4096` 메모리 접근 실험에서 coalesced access가 uncoalesced access보다 약 3.29x 빨랐다. GEMM에서도 warp 단위의 연속 주소 접근을 유지하는 것이 global memory 성능의 핵심임을 확인했다.
 - **Out-of-Bounds Handling**: 공유 메모리 로딩 시 행렬 크기가 타일 규격으로 나누어떨어지지 않는 경우(`511x257 @ 257x333`), 경계 검사 조건문 및 `0.0f` 패딩 처리가 필수적임을 검증했다.
+- **Kernel Fusion**: LayerNorm과 GELU 사이의 global memory round-trip을 없애는 것만으로 연산량이 큰 shape일수록 speedup이 커졌다(1.44x → 1.68x). Forward보다 backward에서 절대 시간 절감폭이 더 컸는데, backward 쪽 memory-bound 연산 비중이 더 높기 때문으로 보인다.
 - **cuBLAS와의 격차**: 여전히 남아있는 52.49% 격차는 warp-level scheduling, register spilling 최적화, double buffering 등 더 세밀한 튜닝 영역이며 Phase 2(Triton, warp shuffle)에서 이어서 다룬다.
 
 ---
@@ -198,8 +214,8 @@ python test_extension.py
 ## 다음 목표
 
 - [x] `pytorch-extension/`: C++/pybind11로 `torch.Tensor` 인터페이스 노출, `torch.matmul` 대비 벤치마크 수행
-- [ ] `fused_kernel/`: LayerNorm+GELU fused kernel (forward + backward), 순정 PyTorch 대비 forward/backward speedup 측정
-- [ ] Triton 버전과의 비교는 별도 레포 [`triton-attention-study`](https://github.com/) 에서 진행
+- [x] `fused-kernel/`: LayerNorm+GELU fused kernel (forward + backward), 순정 PyTorch 대비 forward/backward speedup 측정
+- [ ] Triton 버전과의 비교는 별도 레포 `triton-attention-study`에서 진행 <!-- TODO: 레포 링크 확정 후 채우기 -->
 
 ---
 
@@ -208,3 +224,5 @@ python test_extension.py
 - [코얼레싱했을 때 vs 안 했을 때 성능 차이](https://velog.io/@valentinho/CUDA-%EB%A9%94%EB%AA%A8%EB%A6%AC-coalescing)
 - [gemm 최적화를 해보자](https://velog.io/@valentinho/GEMM%EC%97%90-%EB%8C%80%ED%95%B4%EC%84%9C-%EC%95%8C%EC%95%84%EB%B3%B4%EC%9E%902)
 - [fused kernel이 필요한 이유](https://velog.io/@valentinho/Cudapytorch-Fused-Kernel)
+- [fused kernel layer + gelu] (https://velog.io/@valentinho/fused-kernel-%EB%A1%9C-layernormalize-gelu-%ED%95%A8%EC%88%98-%ED%95%A9%EC%B9%98%EA%B8%B0-1)
+- [mathematic logic for layer gelu backward] (https://velog.io/@valentinho/CUDA-LayerNorm-GELU-%EC%88%98%ED%95%99%EC%A0%81-%EB%85%BC%EB%A6%AC)
