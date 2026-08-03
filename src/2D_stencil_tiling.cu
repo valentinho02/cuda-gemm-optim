@@ -131,24 +131,6 @@ __global__ void stencil_2d_kernel(
 }
 
 // ======================================================
-// v2 stencil kernel with shared memory
-// ======================================================
-
-__global__ void stencil_2d_kernel_v2(
-    const float* __restrict__ in,
-    float* __restrict__ out,
-    int width,
-    int height,
-    float c0,
-    float c1)
-{
-    __shared__ float s_data[TILE_SIZE + 2 * RADIUS][TILE_SIZE + 2 * RADIUS];
-    int gx = blockIdx.x * TILE_SIZE + threadIdx.x;
-    int gy = blockIdx.y * TILE_SIZE + threadIdx.y;
-    
-}
-
-// ======================================================
 // Benchmark
 // ======================================================
 
@@ -214,9 +196,7 @@ void benchmark()
             (N + TILE_SIZE - 1) / TILE_SIZE,
             (N + TILE_SIZE - 1) / TILE_SIZE);
 
-        //--------------------------
-        // Warm-up
-        //--------------------------
+        // Warm up
 
         for (int i = 0; i < 10; i++)
         {
@@ -239,9 +219,8 @@ void benchmark()
 
         cudaDeviceSynchronize();
 
-        //--------------------------
         // Naive
-        //--------------------------
+
 
         cudaEventRecord(start);
 
@@ -268,10 +247,7 @@ void benchmark()
 
         naive_ms /= repeat;
 
-        //--------------------------
         // Shared
-        //--------------------------
-
         cudaEventRecord(start);
 
         for (int i = 0; i < repeat; i++)
@@ -311,8 +287,6 @@ void benchmark()
     cudaEventDestroy(stop);
 }
 
-// ======================================================
-
 int main()
 {
     srand((unsigned)time(nullptr));
@@ -323,7 +297,7 @@ int main()
 }
 
 /*
-v1: copied result
+copied result
 ===============================================
 2D Stencil Benchmark
 Repeat : 100
@@ -337,7 +311,3 @@ Repeat : 100
     8192          2.4425          3.2238         0.76x
 */
 
-/*
-v2: copied result
-
-*/
