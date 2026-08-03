@@ -18,6 +18,7 @@
   - [PyTorch Custom Extension Benchmark (2048x2048)](#pytorch-custom-extension-benchmark-2048x2048)
   - [행렬 크기별 스케일링](#행렬-크기별-스케일링)
 - [메모리 접근 패턴 실험](#메모리-접근-패턴-실험)
+- [CUDA Histogram Atomic Optimization](#cuda-histogram-atomic-optimization)
 - [Fused LayerNorm + GELU 벤치마크](#fused-layernorm--gelu-벤치마크)
 - [빌드 및 실행](#빌드-및-실행)
 - [배운 것](#배운-것)
@@ -46,7 +47,8 @@ cuda-gemm-optim/
 │   ├── v2_tiling.cu
 │   ├── v3_registerBlocking.cu
 │   ├── v4_cuBLAS.cu
-│   └── memory_coalescing.cu
+│   ├── memory_coalescing.cu
+│   └── histogram.cu
 │
 ├── pytorch-extension/
 │   ├── setup.py
@@ -73,6 +75,7 @@ cuda-gemm-optim/
 | 2 | Shared Memory Tiling | 타일 단위로 shared memory에 캐싱, global read 횟수 K/TILE_SIZE로 감소 | [`src/v2_tiling.cu`](src/v2_tiling.cu) |
 | 3 | Register Blocking | 스레드 1개가 여러 출력 원소 계산 + `float4` 벡터화 로드로 대역폭 극대화 | [`src/v3_registerBlocking.cu`](src/v3_registerBlocking.cu) |
 | 4 | cuBLAS | 비교 기준선 (`cublasSgemm`) | [`src/v4_cuBLAS.cu`](src/v4_cuBLAS.cu) |
+| 실험 | Histogram Atomic Optimization | global atomic contention을 shared memory privatization과 thread coarsening으로 완화 | [`src/histogram.cu`](src/histogram.cu) |
 
 ---
 
@@ -143,6 +146,22 @@ Uncoalesced access가 coalesced access보다 약 3.29x 느렸다. 같은 연산�
 
 ---
 
+## CUDA Histogram Atomic Optimization
+
+히스토그램 계산에서 atomic contention이 성능에 미치는 영향을 확인하기 위해 `1024 MB` 입력 데이터에 대해 256-bin histogram을 계산했다. CPU reference histogram과 모든 CUDA kernel 결과를 비교하여 correctness를 검증했다.
+
+| 커널 | 핵심 아이디어 | 실행 시간 | Naive 대비 speedup | 검증 |
+|---|---|---:|---:|---|
+| Global Naive | 모든 스레드가 global histogram에 직접 `atomicAdd` | 428.611 ms | 1.00x | PASS |
+| Privatized | 블록별 shared memory histogram에 먼저 누적 후 global histogram으로 merge | 55.538 ms | 7.717x | PASS |
+| Coarsened | shared histogram privatization + grid-strided loop로 thread coarsening 적용 | 12.184 ms | 35.179x | PASS |
+
+Global memory의 동일 bin에 atomic operation이 몰리면 serialization이 크게 발생한다. 블록 단위 shared memory histogram으로 atomic 범위를 좁히자 7.7x 개선되었고, grid-strided loop로 고정된 블록 수에서 각 스레드가 여러 입력을 처리하게 만들자 launch/grid 관리 비용과 global merge 부담이 줄어 35.2x까지 개선되었다.
+
+실험 코드: [`src/histogram.cu`](src/histogram.cu)
+
+---
+
 ## Fused LayerNorm + GELU 벤치마크
 
 LayerNorm과 GELU를 하나의 CUDA kernel로 fusion하여 kernel launch overhead와 global memory round-trip을 줄였다. PyTorch Native(LayerNorm → GELU)와 동일한 연산 결과를 유지하면서 forward와 backward를 모두 측정하였다.
@@ -176,6 +195,9 @@ nvcc -O3 -arch=sm_75 src/v3_registerBlocking.cu -o v3_bench
 
 # memory coalescing 실험
 nvcc -O3 -arch=sm_75 src/memory_coalescing.cu -o memory_coalescing
+
+# histogram atomic optimization 실험
+nvcc -O3 -arch=sm_75 src/histogram.cu -o histogram
 ```
 
 ### PyTorch Custom Extension 빌드 및 벤치마크 실행
@@ -205,6 +227,7 @@ python benchmark.py
 - **Naive → Tiling**: memory-bound 커널에서 global memory 재접근 횟수를 줄이는 것이 성능에 가장 직접적인 영향을 준다. 원소당 K회 접근하던 것을 K/TILE_SIZE회로 줄이면서 1.46x 개선을 확인했다.
 - **Tiling → Register Blocking**: shared memory bandwidth 자체가 다음 병목이 되고, 스레드당 여러 출력을 계산해 ILP를 높이고 `float4` 벡터화로 메모리 대역폭을 더 끌어올리면서 1.77x 추가 개선을 확인했다.
 - **Memory Coalescing**: `4096 x 4096` 메모리 접근 실험에서 coalesced access가 uncoalesced access보다 약 3.29x 빨랐다. GEMM에서도 warp 단위의 연속 주소 접근을 유지하는 것이 global memory 성능의 핵심임을 확인했다.
+- **Atomic Contention**: 히스토그램처럼 여러 스레드가 같은 주소를 갱신하는 workload에서는 global atomic이 병목이 된다. Shared memory privatization과 thread coarsening을 적용해 1024 MB 입력 기준 35.18x speedup을 확인했다.
 - **Out-of-Bounds Handling**: 공유 메모리 로딩 시 행렬 크기가 타일 규격으로 나누어떨어지지 않는 경우(`511x257 @ 257x333`), 경계 검사 조건문 및 `0.0f` 패딩 처리가 필수적임을 검증했다.
 - **Kernel Fusion**: LayerNorm과 GELU 사이의 global memory round-trip을 없애는 것만으로 연산량이 큰 shape일수록 speedup이 커졌다(1.44x → 1.68x). Forward보다 backward에서 절대 시간 절감폭이 더 컸는데, backward 쪽 memory-bound 연산 비중이 더 높기 때문으로 보인다.
 - **cuBLAS와의 격차**: 여전히 남아있는 52.49% 격차는 warp-level scheduling, register spilling 최적화, double buffering 등 더 세밀한 튜닝 영역이며 Phase 2(Triton, warp shuffle)에서 이어서 다룬다.
@@ -215,7 +238,6 @@ python benchmark.py
 
 - [x] `pytorch-extension/`: C++/pybind11로 `torch.Tensor` 인터페이스 노출, `torch.matmul` 대비 벤치마크 수행
 - [x] `fused-kernel/`: LayerNorm+GELU fused kernel (forward + backward), 순정 PyTorch 대비 forward/backward speedup 측정
-- [ ] Triton 버전과의 비교는 별도 레포 `triton-attention-study`에서 진행 <!-- TODO: 레포 링크 확정 후 채우기 -->
 
 ---
 
@@ -226,3 +248,4 @@ python benchmark.py
 - [fused kernel이 필요한 이유](https://velog.io/@valentinho/Cudapytorch-Fused-Kernel)
 - [fused kernel layer + gelu](https://velog.io/@valentinho/fused-kernel-%EB%A1%9C-layernormalize-gelu-%ED%95%A8%EC%88%98-%ED%95%A9%EC%B9%98%EA%B8%B0-1)
 - [mathematic logic for layer gelu backward](https://velog.io/@valentinho/CUDA-LayerNorm-GELU-%EC%88%98%ED%95%99%EC%A0%81-%EB%85%BC%EB%A6%AC)
+- [histogram 관련 velog](https://velog.io/@valentinho/pmpp-Parallel-Histogram)
